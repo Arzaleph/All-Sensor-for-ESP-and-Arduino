@@ -1,3 +1,5 @@
+// non blynk
+
 #include <DHT.h>
 #include <DHT_U.h>
 #include <Adafruit_Sensor.h>
@@ -66,4 +68,92 @@ void loop() {
   }
 
   delay(2000);
+}
+
+// blynk esp32
+
+#include <WiFi.h>
+#include <DHT.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
+#include <BlynkSimpleEsp32.h>
+
+// ===== GANTI DENGAN KREDENSIAL KAMU =====
+#define BLYNK_TEMPLATE_ID "TMPL6DsWd0Qmt"
+#define BLYNK_TEMPLATE_NAME "Smart Home"
+#define BLYNK_AUTH_TOKEN "Alox1gUHrXWqYU8Nfnf0ptWG4v46yhnh"
+
+char ssid[] = "Nuju Coffee Kedaton";
+char pass[] = "zozogakmahallagi";
+
+// ===== KONFIGURASI PIN =====
+#define DHTPIN 4
+#define DHTTYPE DHT22
+const int pirPin = 2;
+const int ledGerak = 13;
+const int ledSuhuTinggi = 12;
+
+DHT dht(DHTPIN, DHTTYPE);
+LiquidCrystal_I2C lcd(0x27, 16, 2);
+
+BlynkTimer timer;
+
+void kirimDataKeBlynk() {
+  float suhu = dht.readTemperature();
+  float kelembapan = dht.readHumidity();
+  int motion = digitalRead(pirPin);
+
+  // Kirim data ke Blynk
+  Blynk.virtualWrite(V0, suhu);
+  Blynk.virtualWrite(V1, kelembapan);
+  Blynk.virtualWrite(V2, motion == HIGH ? "Terdeteksi" : "Tidak");
+
+  // LED fisik
+  digitalWrite(ledGerak, motion == HIGH ? HIGH : LOW);
+  digitalWrite(ledSuhuTinggi, suhu > 35 ? HIGH : LOW);
+
+  // LCD
+  lcd.setCursor(0, 0);
+  lcd.print("T:");
+  lcd.print(suhu);
+  lcd.print((char)223);
+  lcd.print("C H:");
+  lcd.print(kelembapan);
+  lcd.print("% ");
+
+  lcd.setCursor(0, 1);
+  lcd.print("Gerak: ");
+  lcd.print(motion == HIGH ? "TERDETEKSI " : "TIDAK     ");
+
+  // Serial
+  Serial.print("Suhu: ");
+  Serial.print(suhu);
+  Serial.print(" C, Kelembapan: ");
+  Serial.print(kelembapan);
+  Serial.print(" %, Gerakan: ");
+  Serial.print(motion == HIGH ? "Terdeteksi" : "Tidak");
+  Serial.print(", Suhu Tinggi: ");
+  Serial.println(suhu > 35 ? "YA" : "TIDAK");
+}
+
+void setup() {
+  Serial.begin(115200);
+
+  pinMode(pirPin, INPUT);
+  pinMode(ledGerak, OUTPUT);
+  pinMode(ledSuhuTinggi, OUTPUT);
+
+  dht.begin();
+  lcd.begin(16, 2);
+  lcd.backlight();
+
+  WiFi.begin(ssid, pass);
+  Blynk.begin(BLYNK_AUTH_TOKEN, ssid, pass);
+
+  timer.setInterval(1000L, kirimDataKeBlynk);
+}
+
+void loop() {
+  Blynk.run();
+  timer.run();
 }
