@@ -66,7 +66,7 @@ void loop() {
 
 
 
-// Relay Pompa
+// Relay Pompa BLYNK
 
 
 #define BLYNK_TEMPLATE_ID "TMPL6qC47Qp7F"
