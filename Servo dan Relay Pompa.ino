@@ -186,3 +186,171 @@ void loop() {
   timer.run();
 }
 
+
+
+
+
+
+
+
+
+
+
+
+// arduino untuk ldr dan soilmoisture
+
+// Pin untuk sensor kelembaban tanah (Analog)
+const int soilMoisturePin = A0;
+// Pin untuk LDR (Analog)
+const int ldrPin = A1;
+// Pin untuk relay (Digital)
+const int relayPin = 7;
+
+// Nilai ambang batas kelembaban tanah (sesuaikan dengan sensor Anda)
+// Semakin rendah nilainya, semakin kering tanahnya
+const int thresholdLembab = 400; // Contoh nilai, perlu dikalibrasi
+
+void setup() {
+  Serial.begin(9600);
+  pinMode(relayPin, OUTPUT);
+  digitalWrite(relayPin, HIGH); // Matikan relay saat awal (HIGH untuk relay modul aktif LOW)
+                                 // atau LOW jika relay modul Anda aktif HIGH
+  Serial.println("Sistem Monitoring dan Otomatisasi Pengairan Siap");
+}
+
+void loop() {
+  // Baca nilai sensor kelembaban tanah
+  int nilaiKelembaban = analogRead(soilMoisturePin);
+  Serial.print("Kelembaban Tanah: ");
+  Serial.print(nilaiKelembaban);
+
+  // Baca nilai LDR
+  int nilaiCahaya = analogRead(ldrPin);
+  Serial.print(", Intensitas Cahaya: ");
+  Serial.println(nilaiCahaya);
+
+  // Logika untuk mengontrol pompa air
+  if (nilaiKelembaban > thresholdLembab) { // Jika tanah kering (nilai analog sensor tinggi saat kering)
+    digitalWrite(relayPin, LOW); // Nyalakan pompa air (LOW untuk relay modul aktif LOW)
+    Serial.println("Tanah KERING. Pompa Menyala.");
+  } else {
+    digitalWrite(relayPin, HIGH); // Matikan pompa air (HIGH untuk relay modul aktif LOW)
+    Serial.println("Tanah LEMBAB. Pompa Mati.");
+  }
+
+  delay(2000); // Tunggu 2 detik sebelum pembacaan berikutnya
+}
+
+
+
+
+
+
+
+// ldr, sm, untuk esp8266 ke blynk
+#define BLYNK_TEMPLATE_ID "TMPL6qC47Qp7F"
+#define BLYNK_TEMPLATE_NAME "ESP8266 WIFI"
+#define BLYNK_AUTH_TOKEN "kxWkFPUYNlnsXSXoHgNVW3-whnpgQ5Vk"
+#define BLYNK_PRINT Serial
+
+#include <ESP8266WiFi.h>
+#include <BlynkSimpleEsp8266.h>
+#include <DHT.h> // Library untuk sensor DHT
+
+// Ganti dengan kredensial WiFi Anda
+char ssid[] = "NAMA_WIFI_ANDA";
+char pass[] = "PASSWORD_WIFI_ANDA";
+
+// Ganti dengan Auth Token Blynk Anda
+char auth[] = "AUTH_TOKEN_BLYNK_ANDA";
+
+// Pin untuk sensor kelembaban tanah (Analog)
+const int soilMoisturePin = A0;
+
+// Pin untuk sensor DHT22 (Digital)
+#define DHTPIN D2 // Contoh menggunakan pin D2 (GPIO4). Anda bisa ganti sesuai kebutuhan.
+// Tipe sensor DHT (DHT11, DHT21, DHT22)
+#define DHTTYPE DHT22
+DHT dht(DHTPIN, DHTTYPE);
+
+// Pin untuk relay (Digital)
+const int relayPin = D1; // Contoh menggunakan pin D1 (GPIO5) di NodeMCU/Wemos
+
+// Nilai ambang batas kelembaban tanah (sesuaikan dengan sensor Anda)
+const int thresholdLembab = 500;
+
+BlynkTimer timer;
+
+// Fungsi untuk mengirim data sensor ke Blynk
+void sendSensorData() {
+  // Baca nilai sensor kelembaban tanah
+  int soilMoistureValue = analogRead(soilMoisturePin);
+  Serial.print("Kelembaban Tanah: ");
+  Serial.print(soilMoistureValue);
+
+  // Baca suhu dan kelembaban dari DHT22
+  float humidity = dht.readHumidity();
+  float temperature = dht.readTemperature(); // Baca dalam Celsius (default)
+
+  // Cek apakah pembacaan berhasil (NaN artinya gagal)
+  if (isnan(humidity) || isnan(temperature)) {
+    Serial.println(" Gagal membaca dari sensor DHT!");
+  } else {
+    Serial.print(", Suhu: ");
+    Serial.print(temperature);
+    Serial.print(" *C");
+    Serial.print(", Kelembaban Udara: ");
+    Serial.print(humidity);
+    Serial.println(" %");
+
+    // Kirim data ke Blynk
+    Blynk.virtualWrite(V1, temperature);    // Kirim data suhu ke V1
+    Blynk.virtualWrite(V2, humidity);       // Kirim data kelembaban udara ke V2
+  }
+
+  Blynk.virtualWrite(V0, soilMoistureValue); // Kirim data kelembaban tanah ke V0
+
+  // Logika untuk mengontrol pompa air
+  if (soilMoistureValue > thresholdLembab) { // Jika tanah kering (nilai ADC tinggi saat kering untuk beberapa sensor)
+    digitalWrite(relayPin, LOW); // Nyalakan pompa air (asumsi relay aktif LOW)
+    Serial.println("Status Pompa: Tanah KERING. Pompa Menyala.");
+    Blynk.setProperty(V0, "color", "#D3435C"); // Ubah warna gauge kelembaban tanah di Blynk menjadi merah
+  } else {
+    digitalWrite(relayPin, HIGH); // Matikan pompa air (asumsi relay aktif HIGH untuk mati)
+    Serial.println("Status Pompa: Tanah LEMBAB. Pompa Mati.");
+    Blynk.setProperty(V0, "color", "#23C48E"); // Ubah warna gauge kelembaban tanah di Blynk menjadi hijau
+  }
+}
+
+void setup() {
+  Serial.begin(115200);
+  pinMode(relayPin, OUTPUT);
+  digitalWrite(relayPin, HIGH); // Matikan relay saat awal (HIGH untuk relay modul aktif LOW)
+
+  Serial.println("Memulai Sensor DHT...");
+  dht.begin(); // Mulai sensor DHT
+
+  Serial.println("Menghubungkan ke WiFi...");
+  Blynk.begin(auth, ssid, pass);
+  Serial.println("Terhubung ke Blynk!");
+
+  // Atur timer untuk memanggil sendSensorData() setiap 2 detik (atau sesuai kebutuhan)
+  timer.setInterval(2000L, sendSensorData); // 2000L untuk 2 detik. Untuk DHT, pembacaan jangan terlalu cepat.
+}
+
+void loop() {
+  Blynk.run();
+  timer.run(); // Jalankan timer Blynk
+}
+
+// Opsional: Jika Anda ingin kontrol manual dari Blynk untuk relay
+// BLYNK_WRITE(V3) { // Misalkan V3 adalah tombol untuk relay
+//   int pinValue = param.asInt(); // Dapatkan nilai dari tombol (0 atau 1)
+//   if (pinValue == 1) {
+//     digitalWrite(relayPin, LOW); // Nyalakan pompa
+//     Serial.println("Relay ON dari Blynk");
+//   } else {
+//     digitalWrite(relayPin, HIGH); // Matikan pompa
+//     Serial.println("Relay OFF dari Blynk");
+//   }
+// }
